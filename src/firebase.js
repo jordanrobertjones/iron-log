@@ -15,27 +15,3 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
-```
-
-Save the file.
-
-**Step 2: Open your terminal**
-
-Open Terminal (Mac) or Command Prompt (Windows). Navigate to the iron-log folder:
-```
-cd path/to/iron-log
-```
-
-For example if you unzipped it on your Desktop it might be:
-```
-cd ~/Desktop/iron-log
-```
-
-**Step 3: Install and run**
-```
-npm install
-```
-
-Wait for it to finish (might take a minute), then:
-```
-npm run dev
