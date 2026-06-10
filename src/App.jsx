@@ -118,7 +118,9 @@ export default function App() {
     slots.forEach((_, i) => { const ex = getExForSlot(swaps, dk, i); const c2 = cur[dk]?.[ex.id]; if (!c2) return; const w = parseFloat(c2.weight) || 0; const sets = Array.from({ length: ex.sets }, (_, j) => ex.timed ? pS(c2[`set${j}`]) : (parseFloat(c2[`set${j}`]) || 0)); if (w > 0 || sets.some(s => s > 0)) { has = true; se[ex.id] = { weight: w, sets }; } });
     if (!has) { flash("Enter numbers!"); return; }
     const nd = { ...data, [dk]: [...(data[dk] || []), { date: new Date().toISOString(), exercises: se }] };
-    setData(nd); await persist(nd, cardio);
+    const ok = await persist(nd, cardio);
+    if (!ok) { flash("Save failed. Check connection and try again."); return; }
+    setData(nd);
     flash("Saved!"); setCur(p => ({ ...p, [dk]: {} }));
   };
 
