@@ -5,36 +5,50 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 // Path: users/{uid}
 // Structure: { workouts: {...}, cardio: [...], goal: "full", swaps: {...} }
 
+let lastErrorCode = null;
+
+function recordError(label, error) {
+  lastErrorCode = error?.code || 'unknown';
+  console.error(`${label}:`, error);
+}
+
+export function getLastDbErrorCode() {
+  return lastErrorCode;
+}
+
 export async function loadUserData(uid) {
   try {
+    lastErrorCode = null;
     const ref = doc(db, 'users', uid);
     const snap = await getDoc(ref);
     if (snap.exists()) return snap.data();
     return null;
   } catch (e) {
-    console.error('Load error:', e);
+    recordError('Load error', e);
     return null;
   }
 }
 
 export async function saveUserData(uid, data) {
   try {
+    lastErrorCode = null;
     const ref = doc(db, 'users', uid);
     await setDoc(ref, data, { merge: true });
     return true;
   } catch (e) {
-    console.error('Save error:', e);
+    recordError('Save error', e);
     return false;
   }
 }
 
 export async function updateField(uid, field, value) {
   try {
+    lastErrorCode = null;
     const ref = doc(db, 'users', uid);
     await updateDoc(ref, { [field]: value });
     return true;
   } catch (e) {
-    console.error('Update error:', e);
+    recordError('Update error', e);
     return false;
   }
 }

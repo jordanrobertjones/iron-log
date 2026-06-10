@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { auth, googleProvider } from "./firebase";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
-import { loadUserData, saveUserData, updateField } from "./db";
+import { getLastDbErrorCode, loadUserData, saveUserData, updateField } from "./db";
 import {
   ALTS, DEFAULT_EX, DAY_SLOTS, DAYS_META, DK, GOALS,
   SEED_W, SEED_C,
@@ -29,6 +29,7 @@ const runLine = r => {
   return `${r.distance ? `${r.distance} mi` : ""}${r.time ? ` in ${r.time} min` : ""}${pace ? ` -- ${pace}` : ""}${r.speed ? ` -- ${r.speed}` : ""}${r.sprintSpeed ? ` -- final 60s ${r.sprintSpeed}` : ""}${r.hr ? ` -- HR ${r.hr}` : ""}`;
 };
 const byDateAsc = items => [...items].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+const emptyRun = { distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" };
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
@@ -48,7 +49,7 @@ export default function App() {
   const [customName, setCustomName] = useState("");
   const riR = useRef({});
   const swR = useRef({});
-  const [cf, setCf] = useState({ distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" });
+  const [cf, setCf] = useState(emptyRun);
 
   // Auth listener
   useEffect(() => {
@@ -72,6 +73,26 @@ export default function App() {
       }
     })();
   }, [user]);
+
+  // Keep an unfinished run on this device until Firestore confirms the save.
+  useEffect(() => {
+    if (!user) return;
+    const savedDraft = localStorage.getItem(`iron-log-run-draft:${user.uid}`);
+    if (!savedDraft) return;
+    try {
+      setCf({ ...emptyRun, ...JSON.parse(savedDraft) });
+    } catch {
+      localStorage.removeItem(`iron-log-run-draft:${user.uid}`);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const key = `iron-log-run-draft:${user.uid}`;
+    const hasDraft = Object.values(cf).some(value => String(value).trim());
+    if (hasDraft) localStorage.setItem(key, JSON.stringify(cf));
+    else localStorage.removeItem(key);
+  }, [cf, user]);
 
   // Cleanup timers
   useEffect(() => () => {
@@ -129,9 +150,13 @@ export default function App() {
     const pace = fmtPace(calcPace(cf));
     const nc = byDateAsc([...cardio, { date: new Date().toISOString(), ...cf, pace }]);
     const ok = await persist(data, nc);
-    if (!ok) { flash("Save failed. Check connection and try again."); return; }
+    if (!ok) {
+      const denied = getLastDbErrorCode() === "permission-denied";
+      flash(denied ? "Database access expired. Run kept on this device." : "Save failed. Run kept on this device.");
+      return;
+    }
     setCardio(nc);
-    flash("Run saved!"); setCf({ distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" });
+    flash("Run saved!"); setCf(emptyRun);
   };
 
   const xport = () => {
