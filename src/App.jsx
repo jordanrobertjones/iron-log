@@ -14,6 +14,20 @@ const CC = { up: "#45B764", caution: "#F59E0B", steady: "#2D7DD2", info: "#888" 
 
 const pill = a => ({ padding: "6px 14px", background: a ? "#282828" : "transparent", border: `1px solid ${a ? "#444" : "#282828"}`, borderRadius: 20, color: a ? "#F0EDE8" : "#555", fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" });
 const inp = { padding: "10px 4px", background: "#1E1E1E", border: "1px solid #2A2A2A", borderRadius: 8, color: "#F0EDE8", fontSize: 17, fontWeight: 600, textAlign: "center", fontFamily: "monospace", outline: "none", boxSizing: "border-box", width: "100%" };
+const calcPace = r => {
+  const d = parseFloat(r?.distance) || 0, t = parseFloat(r?.time) || 0;
+  return d > 0 && t > 0 ? t / d : 0;
+};
+const fmtPace = p => {
+  if (!p) return "";
+  let m = Math.floor(p), s = Math.round((p - m) * 60);
+  if (s === 60) { m += 1; s = 0; }
+  return `${m}:${String(s).padStart(2, "0")} /mi`;
+};
+const runLine = r => {
+  const pace = r.pace || fmtPace(calcPace(r));
+  return `${r.distance ? `${r.distance} mi` : ""}${r.time ? ` in ${r.time} min` : ""}${pace ? ` -- ${pace}` : ""}${r.speed ? ` -- ${r.speed}` : ""}${r.sprintSpeed ? ` -- final 60s ${r.sprintSpeed}` : ""}${r.hr ? ` -- HR ${r.hr}` : ""}`;
+};
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
@@ -33,7 +47,7 @@ export default function App() {
   const [customName, setCustomName] = useState("");
   const riR = useRef({});
   const swR = useRef({});
-  const [cf, setCf] = useState({ distance: "", time: "", speed: "", calories: "", hr: "", notes: "" });
+  const [cf, setCf] = useState({ distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" });
 
   // Auth listener
   useEffect(() => {
@@ -109,9 +123,10 @@ export default function App() {
 
   const saveC = async () => {
     if (!cf.distance && !cf.time) { flash("Enter distance or time!"); return; }
-    const nc = [...cardio, { date: new Date().toISOString(), ...cf }];
+    const pace = fmtPace(calcPace(cf));
+    const nc = [...cardio, { date: new Date().toISOString(), ...cf, pace }];
     setCardio(nc); await persist(data, nc);
-    flash("Run saved!"); setCf({ distance: "", time: "", speed: "", calories: "", hr: "", notes: "" });
+    flash("Run saved!"); setCf({ distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" });
   };
 
   const xport = () => {
@@ -151,6 +166,7 @@ export default function App() {
   const isC = tab === "CARDIO", isH = tab === "HISTORY", dm = DAYS_META[tab], nd = nxDay(data);
   const coach = getCoach(cardio, goal);
   const gLabel = GOALS.find(g => g.id === goal)?.label || "";
+  const currentPace = fmtPace(calcPace(cf));
 
   return (
     <div style={{ fontFamily: "system-ui,-apple-system,sans-serif", background: "#0C0C0C", color: "#F0EDE8", minHeight: "100vh", maxWidth: 480, margin: "0 auto", paddingBottom: 80 }}>
@@ -295,14 +311,18 @@ export default function App() {
             <button style={pill(sub === "history")} onClick={() => setSub("history")}>Past Runs</button>
           </div>
           {sub === "log" && <div style={{ padding: "8px 20px" }}>
-            {cardio.length > 0 && <div style={{ padding: "8px 12px", marginBottom: 10, borderRadius: 8, fontSize: 12, background: "#ffffff06", color: "#888", border: "1px solid #ffffff0a" }}>Last ({fD(cardio[cardio.length - 1].date)}): {cardio[cardio.length - 1].distance || "?"} mi in {cardio[cardio.length - 1].time || "?"} min{cardio[cardio.length - 1].speed ? ` -- ${cardio[cardio.length - 1].speed}` : ""}</div>}
+            {cardio.length > 0 && <div style={{ padding: "8px 12px", marginBottom: 10, borderRadius: 8, fontSize: 12, background: "#ffffff06", color: "#888", border: "1px solid #ffffff0a" }}>Last ({fD(cardio[cardio.length - 1].date)}): {runLine(cardio[cardio.length - 1])}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[["Distance (mi)", "distance", "2.55", "decimal"], ["Time (min)", "time", "30", "decimal"], ["Speed", "speed", "5.3 mph"], ["Calories", "calories", "300", "decimal"], ["Max HR", "hr", "178", "numeric"]].map(([l, k, ph, im]) => (
+              {[["Distance (mi)", "distance", "2.55", "decimal"], ["Time (min)", "time", "30", "decimal"], ["Run speed", "speed", "5.3 mph"], ["Final 60s", "sprintSpeed", "9.0 mph"], ["Calories", "calories", "300", "decimal"], ["Max HR", "hr", "178", "numeric"]].map(([l, k, ph, im]) => (
                 <div key={k} style={{ marginBottom: 4 }}>
                   <label style={{ fontSize: 11, color: "#555", fontWeight: 600, marginBottom: 3, display: "block" }}>{l}</label>
                   <input type={im ? "number" : "text"} inputMode={im || "text"} placeholder={ph} value={cf[k]} onChange={e => setCf(f => ({ ...f, [k]: e.target.value }))} style={{ width: "100%", padding: "10px", background: "#1E1E1E", border: "1px solid #2A2A2A", borderRadius: 8, color: "#F0EDE8", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
                 </div>
               ))}
+            </div>
+            <div style={{ padding: "10px 12px", margin: "2px 0 8px", borderRadius: 8, background: "#F59E0B10", border: "1px solid #F59E0B25", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "#F59E0B", fontWeight: 700 }}>Overall pace</span>
+              <span style={{ fontSize: 18, color: "#F0EDE8", fontWeight: 700, fontFamily: "monospace" }}>{currentPace || "--"}</span>
             </div>
             <div style={{ marginTop: 6, marginBottom: 8 }}>
               <label style={{ fontSize: 11, color: "#555", fontWeight: 600, marginBottom: 3, display: "block" }}>Notes</label>
@@ -315,7 +335,7 @@ export default function App() {
               [...cardio].reverse().slice(0, 30).map((r, i) => (
                 <div key={i} style={{ padding: "10px 14px", background: "#141414", borderRadius: 10, marginBottom: 6, fontSize: 12, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700, marginBottom: 3 }}>{fD(r.date)}{parseFloat(r.time) >= 45 && <span style={{ padding: "2px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, background: "#F59E0B22", color: "#F59E0B", marginLeft: 6 }}>LONG</span>}</div>
-                  <div style={{ color: "#777" }}>{r.distance && `${r.distance} mi`}{r.time && ` in ${r.time} min`}{r.speed && ` -- ${r.speed}`}{r.hr && ` -- HR ${r.hr}`}</div>
+                  <div style={{ color: "#777" }}>{runLine(r)}</div>
                   {r.notes && <div style={{ color: "#555", fontStyle: "italic", marginTop: 4 }}>{r.notes}</div>}
                 </div>
               ))}
@@ -346,7 +366,7 @@ export default function App() {
                 })}
                 {it.tp === "c" && (
                   <div>
-                    <div style={{ color: "#777" }}>{it.distance && `${it.distance} mi`}{it.time && ` in ${it.time} min`}{it.speed && ` -- ${it.speed}`}</div>
+                    <div style={{ color: "#777" }}>{runLine(it)}</div>
                     {it.notes && <div style={{ color: "#555", fontStyle: "italic", marginTop: 3 }}>{it.notes}</div>}
                   </div>
                 )}

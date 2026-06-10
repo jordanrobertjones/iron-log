@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --open /app.html",
+    "dev": "vite --open /iron-log/app.html",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/sync-pages.mjs"

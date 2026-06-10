@@ -167,6 +167,16 @@ export const SEED_C = [
 export const fS = s => { if (s == null) return "-"; const m = Math.floor(s / 60), r = s % 60; return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${s}s`; };
 export const pS = v => { if (!v) return 0; v = String(v).trim(); if (v.includes(":")) { const p = v.split(":"); return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1]) || 0); } return parseInt(v) || 0; };
 export const fD = d => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const calcPace = r => {
+  const d = parseFloat(r?.distance) || 0, t = parseFloat(r?.time) || 0;
+  return d > 0 && t > 0 ? t / d : 0;
+};
+const fmtPace = p => {
+  if (!p) return "";
+  let m = Math.floor(p), s = Math.round((p - m) * 60);
+  if (s === 60) { m += 1; s = 0; }
+  return `${m}:${String(s).padStart(2, "0")} /mi`;
+};
 
 export function getProg(ex, last) {
   if (!last?.sets?.length) return { t: "none", m: "First time -- start light." };
@@ -224,20 +234,21 @@ export function getCoach(runs, goal) {
 }
 
 export function mkCSV(d, c, swaps) {
-  let o = "Date,Type,Exercise,Weight,Unit,Set1,Set2,Set3,Notes\n";
+  let o = "Date,Type,Exercise,Weight,Unit,Set1,Set2,Set3,Notes,Final 60s,Overall Pace\n";
   for (const dk of DK) {
     for (const s of (d[dk] || [])) {
       const dt = new Date(s.date).toLocaleDateString("en-US");
       for (const [eid, dd] of Object.entries(s.exercises || {})) {
         const ex = DEFAULT_EX[eid] || {};
         const ss = dd.sets || [];
-        o += `${dt},${DAYS_META[dk].name},${ex.name || eid},${dd.weight},${ex.timed ? "sec" : ex.unit || "lbs"},${ss[0] ?? ""},${ss[1] ?? ""},${ss[2] ?? ""},\n`;
+        o += `${dt},${DAYS_META[dk].name},${ex.name || eid},${dd.weight},${ex.timed ? "sec" : ex.unit || "lbs"},${ss[0] ?? ""},${ss[1] ?? ""},${ss[2] ?? ""},,,\n`;
       }
     }
   }
   for (const r of c) {
     const dt = new Date(r.date).toLocaleDateString("en-US");
-    o += `${dt},Cardio,Treadmill,,,${r.distance || ""},${r.time || ""},${r.speed || ""},"${(r.notes || "").replace(/"/g, '""')}"\n`;
+    const pace = r.pace || fmtPace(calcPace(r));
+    o += `${dt},Cardio,Treadmill,,,${r.distance || ""},${r.time || ""},${r.speed || ""},"${(r.notes || "").replace(/"/g, '""')}",${r.sprintSpeed || ""},${pace}\n`;
   }
   return o;
 }
