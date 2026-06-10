@@ -28,6 +28,7 @@ const runLine = r => {
   const pace = r.pace || fmtPace(calcPace(r));
   return `${r.distance ? `${r.distance} mi` : ""}${r.time ? ` in ${r.time} min` : ""}${pace ? ` -- ${pace}` : ""}${r.speed ? ` -- ${r.speed}` : ""}${r.sprintSpeed ? ` -- final 60s ${r.sprintSpeed}` : ""}${r.hr ? ` -- HR ${r.hr}` : ""}`;
 };
+const byDateAsc = items => [...items].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
@@ -62,7 +63,7 @@ export default function App() {
       const d = await loadUserData(user.uid);
       if (d) {
         if (d.workouts && Object.keys(d.workouts).length) { setData(d.workouts); setTab(nxDay(d.workouts)); }
-        if (d.cardio?.length) setCardio(d.cardio);
+        if (d.cardio?.length) setCardio(byDateAsc(d.cardio));
         if (d.goal) setGoal(d.goal);
         if (d.swaps) setSwaps(d.swaps);
       } else {
@@ -81,8 +82,8 @@ export default function App() {
   const flash = m => { setToast(m); setTimeout(() => setToast(null), 2200); };
 
   const persist = async (w, c) => {
-    if (!user) return;
-    await saveUserData(user.uid, { workouts: w, cardio: c });
+    if (!user) return false;
+    return saveUserData(user.uid, { workouts: w, cardio: byDateAsc(c) });
   };
 
   const getLast = useCallback((dk, eid) => {
@@ -124,8 +125,10 @@ export default function App() {
   const saveC = async () => {
     if (!cf.distance && !cf.time) { flash("Enter distance or time!"); return; }
     const pace = fmtPace(calcPace(cf));
-    const nc = [...cardio, { date: new Date().toISOString(), ...cf, pace }];
-    setCardio(nc); await persist(data, nc);
+    const nc = byDateAsc([...cardio, { date: new Date().toISOString(), ...cf, pace }]);
+    const ok = await persist(data, nc);
+    if (!ok) { flash("Save failed. Check connection and try again."); return; }
+    setCardio(nc);
     flash("Run saved!"); setCf({ distance: "", time: "", speed: "", sprintSpeed: "", calories: "", hr: "", notes: "" });
   };
 
@@ -164,7 +167,9 @@ export default function App() {
 
   // Main app (logged in)
   const isC = tab === "CARDIO", isH = tab === "HISTORY", dm = DAYS_META[tab], nd = nxDay(data);
-  const coach = getCoach(cardio, goal);
+  const sortedCardio = byDateAsc(cardio);
+  const latestRun = sortedCardio[sortedCardio.length - 1];
+  const coach = getCoach(sortedCardio, goal);
   const gLabel = GOALS.find(g => g.id === goal)?.label || "";
   const currentPace = fmtPace(calcPace(cf));
 
@@ -311,7 +316,7 @@ export default function App() {
             <button style={pill(sub === "history")} onClick={() => setSub("history")}>Past Runs</button>
           </div>
           {sub === "log" && <div style={{ padding: "8px 20px" }}>
-            {cardio.length > 0 && <div style={{ padding: "8px 12px", marginBottom: 10, borderRadius: 8, fontSize: 12, background: "#ffffff06", color: "#888", border: "1px solid #ffffff0a" }}>Last ({fD(cardio[cardio.length - 1].date)}): {runLine(cardio[cardio.length - 1])}</div>}
+            {latestRun && <div style={{ padding: "8px 12px", marginBottom: 10, borderRadius: 8, fontSize: 12, background: "#ffffff06", color: "#888", border: "1px solid #ffffff0a" }}>Last ({fD(latestRun.date)}): {runLine(latestRun)}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[["Distance (mi)", "distance", "2.55", "decimal"], ["Time (min)", "time", "30", "decimal"], ["Run speed", "speed", "5.3 mph"], ["Final 60s", "sprintSpeed", "9.0 mph"], ["Calories", "calories", "300", "decimal"], ["Max HR", "hr", "178", "numeric"]].map(([l, k, ph, im]) => (
                 <div key={k} style={{ marginBottom: 4 }}>
@@ -332,7 +337,7 @@ export default function App() {
           </div>}
           {sub === "history" && <div style={{ padding: "8px 20px" }}>
             {!cardio.length ? <div style={{ textAlign: "center", padding: 36, color: "#444", fontSize: 13 }}>No runs yet.</div> :
-              [...cardio].reverse().slice(0, 30).map((r, i) => (
+              [...sortedCardio].reverse().slice(0, 30).map((r, i) => (
                 <div key={i} style={{ padding: "10px 14px", background: "#141414", borderRadius: 10, marginBottom: 6, fontSize: 12, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700, marginBottom: 3 }}>{fD(r.date)}{parseFloat(r.time) >= 45 && <span style={{ padding: "2px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, background: "#F59E0B22", color: "#F59E0B", marginLeft: 6 }}>LONG</span>}</div>
                   <div style={{ color: "#777" }}>{runLine(r)}</div>
@@ -350,7 +355,7 @@ export default function App() {
           {(() => {
             const all = [];
             for (const dk of DK) (data[dk] || []).forEach(s => all.push({ ...s, dk, tp: "w" }));
-            cardio.forEach(r => all.push({ ...r, tp: "c" }));
+            sortedCardio.forEach(r => all.push({ ...r, tp: "c" }));
             all.sort((a, b) => new Date(b.date) - new Date(a.date));
             if (!all.length) return <div style={{ textAlign: "center", padding: 36, color: "#444", fontSize: 13 }}>No workouts yet.</div>;
             return all.slice(0, 50).map((it, i) => (
